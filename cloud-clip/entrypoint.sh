@@ -83,17 +83,22 @@ echo "#####Generating configuration file#####"
 # 处理 CORS 允许的来源
 CORS_ORIGINS_JSON="[]"
 if [ -n "${CORS_ALLOWED_ORIGINS}" ]; then
-    IFS=',' read -ra ORIGINS <<< "${CORS_ALLOWED_ORIGINS}"
-    ORIGINS_JSON=""
-    for origin in "${ORIGINS[@]}"; do
+    # 使用逗号分隔并构建 JSON 数组
+    CORS_ORIGINS_JSON="["
+    first=true
+    IFS=',' 
+    for origin in ${CORS_ALLOWED_ORIGINS}; do
+        origin=$(echo "$origin" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
         if [ -n "$origin" ]; then
-            if [ -n "$ORIGINS_JSON" ]; then
-                ORIGINS_JSON="${ORIGINS_JSON}, "
+            if [ "$first" = true ]; then
+                first=false
+            else
+                CORS_ORIGINS_JSON="${CORS_ORIGINS_JSON}, "
             fi
-            ORIGINS_JSON="${ORIGINS_JSON}\"${origin}\""
+            CORS_ORIGINS_JSON="${CORS_ORIGINS_JSON}\"${origin}\""
         fi
     done
-    CORS_ORIGINS_JSON="[${ORIGINS_JSON}]"
+    CORS_ORIGINS_JSON="${CORS_ORIGINS_JSON}]"
 fi
 
 cat>"${CONFIG_FILE}"<<EOF
