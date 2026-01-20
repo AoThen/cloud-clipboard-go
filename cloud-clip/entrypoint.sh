@@ -22,52 +22,52 @@ if [ -n "${MANUAL_KEY_PATH}" ] && [ -n "${MANUAL_CERT_PATH}" ]; then
         # KEY and CERT remain empty, SSL_ENABLED_SOURCE remains 'none'
     fi
 
-# 2. Check for MKCERT_DOMAIN_OR_IP (Second Priority)
-elif [ -n "${MKCERT_DOMAIN_OR_IP}" ]; then
-    echo "MKCERT_DOMAIN_OR_IP is set ('${MKCERT_DOMAIN_OR_IP}'). Managing certificates via mkcert..."
-    # SSL_ENABLED_SOURCE="mkcert"
-    # Define default paths for mkcert generated files
-    MKCERT_KEY_PATH="/app/server-node/data/key.pem"
-    MKCERT_CERT_PATH="/app/server-node/data/cert.pem"
-    CURRENT_DOMAIN=${MKCERT_DOMAIN_OR_IP}
+# # 2. Check for MKCERT_DOMAIN_OR_IP (Second Priority)
+# elif [ -n "${MKCERT_DOMAIN_OR_IP}" ]; then
+#     echo "MKCERT_DOMAIN_OR_IP is set ('${MKCERT_DOMAIN_OR_IP}'). Managing certificates via mkcert..."
+#     # SSL_ENABLED_SOURCE="mkcert"
+#     # Define default paths for mkcert generated files
+#     MKCERT_KEY_PATH="/app/server-node/data/key.pem"
+#     MKCERT_CERT_PATH="/app/server-node/data/cert.pem"
+#     CURRENT_DOMAIN=${MKCERT_DOMAIN_OR_IP}
 
-    # --- mkcert Certificate Generation/Validation Logic ---
-    REGENERATE_CERT=false
-    # Check if cert files exist at the expected mkcert location
-    if [ ! -f "$MKCERT_KEY_PATH" ] || [ ! -f "$MKCERT_CERT_PATH" ]; then
-        echo "mkcert SSL certificates not found. Will generate new ones."
-        REGENERATE_CERT=true
-    # Check domain record file
-    elif [ ! -f "$DOMAIN_RECORD_FILE" ]; then
-        echo "Domain record file not found. Will generate new certificates."
-        REGENERATE_CERT=true
-    else
-        # Read previous domain
-        PREVIOUS_DOMAIN="$(cat "$DOMAIN_RECORD_FILE")"
-        # Compare domains
-        if [ "$CURRENT_DOMAIN" != "$PREVIOUS_DOMAIN" ]; then
-            echo "Domain/IP changed from '$PREVIOUS_DOMAIN' to '$CURRENT_DOMAIN'. Will generate new certificates."
-            REGENERATE_CERT=true
-        else
-            echo "Domain/IP unchanged. Using existing mkcert certificates."
-        fi
-    fi
-    # Generate certificate if needed
-    if [ "$REGENERATE_CERT" = true ]; then
-        echo "##### Generating SSL certificate via mkcert #####"
-        echo "##### Domain/IP: ${CURRENT_DOMAIN} #####"
-        mkcert -key-file "$MKCERT_KEY_PATH" -cert-file "$MKCERT_CERT_PATH" "$CURRENT_DOMAIN"
-        if [ $? -ne 0 ]; then
-            echo "Error: Failed to generate SSL certificates with mkcert." >&2
-            exit 1 # Exit on mkcert failure
-        fi
-        # Record the domain used for generation
-        printf "%s" "$CURRENT_DOMAIN" > "$DOMAIN_RECORD_FILE"
-        echo "mkcert certificates generated successfully."
-    fi
-    # Set KEY and CERT to the mkcert paths
-    KEY="$MKCERT_KEY_PATH"
-    CERT="$MKCERT_CERT_PATH"
+#     # --- mkcert Certificate Generation/Validation Logic ---
+#     REGENERATE_CERT=false
+#     # Check if cert files exist at the expected mkcert location
+#     if [ ! -f "$MKCERT_KEY_PATH" ] || [ ! -f "$MKCERT_CERT_PATH" ]; then
+#         echo "mkcert SSL certificates not found. Will generate new ones."
+#         REGENERATE_CERT=true
+#     # Check domain record file
+#     elif [ ! -f "$DOMAIN_RECORD_FILE" ]; then
+#         echo "Domain record file not found. Will generate new certificates."
+#         REGENERATE_CERT=true
+#     else
+#         # Read previous domain
+#         PREVIOUS_DOMAIN="$(cat "$DOMAIN_RECORD_FILE")"
+#         # Compare domains
+#         if [ "$CURRENT_DOMAIN" != "$PREVIOUS_DOMAIN" ]; then
+#             echo "Domain/IP changed from '$PREVIOUS_DOMAIN' to '$CURRENT_DOMAIN'. Will generate new certificates."
+#             REGENERATE_CERT=true
+#         else
+#             echo "Domain/IP unchanged. Using existing mkcert certificates."
+#         fi
+#     fi
+#     # Generate certificate if needed
+#     if [ "$REGENERATE_CERT" = true ]; then
+#         echo "##### Generating SSL certificate via mkcert #####"
+#         echo "##### Domain/IP: ${CURRENT_DOMAIN} #####"
+#         mkcert -key-file "$MKCERT_KEY_PATH" -cert-file "$MKCERT_CERT_PATH" "$CURRENT_DOMAIN"
+#         if [ $? -ne 0 ]; then
+#             echo "Error: Failed to generate SSL certificates with mkcert." >&2
+#             exit 1 # Exit on mkcert failure
+#         fi
+#         # Record the domain used for generation
+#         printf "%s" "$CURRENT_DOMAIN" > "$DOMAIN_RECORD_FILE"
+#         echo "mkcert certificates generated successfully."
+#     fi
+#     # Set KEY and CERT to the mkcert paths
+#     KEY="$MKCERT_KEY_PATH"
+#     CERT="$MKCERT_CERT_PATH"
 
 # 3. No SSL Configuration Provided
 else
@@ -79,6 +79,23 @@ fi
 
 if [ ! -f $CONFIG_FILE ]; then
 echo "#####Generating configuration file#####"
+
+# 处理 CORS 允许的来源
+CORS_ORIGINS_JSON="[]"
+if [ -n "${CORS_ALLOWED_ORIGINS}" ]; then
+    IFS=',' read -ra ORIGINS <<< "${CORS_ALLOWED_ORIGINS}"
+    ORIGINS_JSON=""
+    for origin in "${ORIGINS[@]}"; do
+        if [ -n "$origin" ]; then
+            if [ -n "$ORIGINS_JSON" ]; then
+                ORIGINS_JSON="${ORIGINS_JSON}, "
+            fi
+            ORIGINS_JSON="${ORIGINS_JSON}\"${origin}\""
+        fi
+    done
+    CORS_ORIGINS_JSON="[${ORIGINS_JSON}]"
+fi
+
 cat>"${CONFIG_FILE}"<<EOF
 {
     "server": {
@@ -96,7 +113,10 @@ cat>"${CONFIG_FILE}"<<EOF
         "historyFile": "/app/server-node/data/history.json",
         "storageDir": "/app/server-node/data/",
         "roomList": ${ROOM_LIST:-false},
-        "roomCleanup": 3600
+        "roomCleanup": 3600,
+        "corsAllowedOrigins": ${CORS_ORIGINS_JSON},
+        "rateLimit": ${RATE_LIMIT:-100},
+        "rateLimitBurst": ${RATE_LIMIT_BURST:-200}
     },
     "text": {
         "limit": ${TEXT_LIMIT:-4096}

@@ -52,8 +52,15 @@ func (s *ClipboardServer) handle_push(w http.ResponseWriter, r *http.Request) {
 	ip := get_remote_ip(r)
 	room := r.URL.Query().Get("room")
 	if room == "" {
-		room = "default" // 默认房间
+		room = "default"
 	}
+
+	if !isValidRoomName(room) {
+		s.logger.Printf("无效的房间名: %s", room)
+		http.Error(w, "无效的房间名", http.StatusBadRequest)
+		return
+	}
+
 	s.logger.Printf("处理 /push WebSocket 连接请求，来自: %s, 房间: %s", ip, room)
 
 	authNeeded := false
@@ -78,14 +85,26 @@ func (s *ClipboardServer) handle_push(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if token != expectedPassword {
-			s.logger.Printf("WebSocket 认证失败: 提供的 token '%s' 与期望的 '%s' 不匹配。来自 IP: %s, 房间: %s", token, expectedPassword, ip, room)
+			s.logger.Printf("WebSocket 认证失败: 无效 token。来自 IP: %s, 房间: %s", ip, room)
 			http.Error(w, "Unauthorized: Invalid token", http.StatusUnauthorized)
 			return
 		}
 		s.logger.Printf("WebSocket 认证成功。来自 IP: %s, 房间: %s", ip, room)
 	}
 
-	conn, err := upgrader.Upgrade(w, r, nil)
+	wsUpgrader := websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool {
+			origin := r.Header.Get("Origin")
+			if origin == "" {
+				return true
+			}
+			host := r.Host
+			allowedOrigins := s.config.Server.CORSAllowedOrigins
+			return checkOriginAllowed(origin, host, allowedOrigins)
+		},
+	}
+
+	conn, err := wsUpgrader.Upgrade(w, r, nil)
 	if err != nil {
 		s.logger.Printf("错误: WebSocket 升级失败: %v", err)
 		return
@@ -241,10 +260,15 @@ func (s *ClipboardServer) handle_push(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *ClipboardServer) handle_file(w http.ResponseWriter, r *http.Request) {
-	// 修改 UUID 提取逻辑
 	pathPart := strings.TrimPrefix(r.URL.Path, s.config.Server.Prefix+"/file/")
-	pathSegments := strings.SplitN(pathPart, "/", 2) // 最多分割成两部分
-	uuid := pathSegments[0]                          // 第一部分总是 UUID
+	pathSegments := strings.SplitN(pathPart, "/", 2)
+	uuid := pathSegments[0]
+
+	if !isValidUUID(uuid) {
+		s.logger.Printf("无效的 UUID: %s", uuid)
+		http.Error(w, "无效的文件标识符", http.StatusBadRequest)
+		return
+	}
 
 	s.logger.Printf("处理文件请求: %s, 方法: %s", uuid, r.Method)
 
@@ -336,6 +360,11 @@ func (s *ClipboardServer) handle_text(w http.ResponseWriter, r *http.Request) {
 	room := r.URL.Query().Get("room")
 	if room == "" {
 		room = "default"
+	}
+
+	if !isValidRoomName(room) {
+		http.Error(w, "无效的房间名", http.StatusBadRequest)
+		return
 	}
 
 	body, err := io.ReadAll(r.Body)
@@ -460,7 +489,11 @@ func (s *ClipboardServer) handle_upload(w http.ResponseWriter, r *http.Request) 
 		room = "default"
 	}
 
-	// 处理 /upload/chunk 路径（文件名初始化请求）
+	if !isValidRoomName(room) {
+		http.Error(w, "无效的房间名", http.StatusBadRequest)
+		return
+	}
+
 	if strings.HasSuffix(path, "/upload/chunk") && contentType == "text/plain" {
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
@@ -471,22 +504,27 @@ func (s *ClipboardServer) handle_upload(w http.ResponseWriter, r *http.Request) 
 		defer r.Body.Close()
 
 		filename := string(body)
+
+		if !isValidFilename(filename) {
+			s.logger.Printf("无效的文件名: %s", filename)
+			http.Error(w, "无效的文件名", http.StatusBadRequest)
+			return
+		}
+
 		uuid := gen_UUID()
 		s.logger.Printf("初始化分块上传: %s, 生成UUID: %s", filename, uuid)
 
-		// 创建文件信息直接记录到 uploadFileMap 中
 		expireTime := time.Now().Unix() + int64(s.config.File.Expire)
 		s.runMutex.Lock()
 		s.uploadFileMap[uuid] = File{
 			Name:       filename,
 			UUID:       uuid,
-			Size:       0, // 初始大小为0
+			Size:       0,
 			ExpireTime: expireTime,
 			UploadTime: time.Now().Unix(),
 		}
 		s.runMutex.Unlock()
 
-		// 返回UUID响应
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"result": map[string]string{"uuid": uuid},
@@ -518,14 +556,34 @@ func (s *ClipboardServer) handle_upload(w http.ResponseWriter, r *http.Request) 
 	defer file.Close()
 
 	fileName := handler.Filename
+
+	if !isValidFilename(fileName) {
+		s.logger.Printf("无效的文件名: %s", fileName)
+		http.Error(w, "无效的文件名", http.StatusBadRequest)
+		return
+	}
+
 	fileSize := handler.Size
 	s.logger.Printf("收到文件上传: %s, 大小: %d, 房间: %s", fileName, fileSize, room)
 
-	// 生成唯一文件名 (UUID)
+	header := make([]byte, 512)
+	if _, err := file.Read(header); err != nil {
+		s.logger.Printf("错误: 读取文件头失败: %v", err)
+		http.Error(w, "无法读取文件", http.StatusBadRequest)
+		return
+	}
+	file.Seek(0, 0)
+
+	mimeType := http.DetectContentType(header)
+	if !isAllowedMimeType(mimeType) {
+		s.logger.Printf("错误: 不允许的文件类型: %s", mimeType)
+		http.Error(w, "不允许的文件类型", http.StatusBadRequest)
+		return
+	}
+
 	uuid := gen_UUID()
 	filePath := filepath.Join(s.storageFolder, uuid)
 
-	// 保存文件
 	dst, err := os.Create(filePath)
 	if err != nil {
 		s.logger.Printf("错误: 创建文件 %s 失败: %v", filePath, err)
@@ -598,8 +656,14 @@ func (s *ClipboardServer) handle_chunk(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 从路径中提取 UUID
 	uuid := strings.TrimPrefix(r.URL.Path, s.config.Server.Prefix+"/upload/chunk/")
+
+	if !isValidUUID(uuid) {
+		s.logger.Printf("无效的 UUID: %s", uuid)
+		http.Error(w, "无效的文件标识符", http.StatusBadRequest)
+		return
+	}
+
 	s.logger.Printf("处理分块上传请求, UUID: %s, 来自: %s", uuid, get_remote_ip(r))
 
 	s.runMutex.Lock()
@@ -665,8 +729,14 @@ func (s *ClipboardServer) handle_finish(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// 从路径中提取 UUID
 	uuid := strings.TrimPrefix(r.URL.Path, s.config.Server.Prefix+"/upload/finish/")
+
+	if !isValidUUID(uuid) {
+		s.logger.Printf("无效的 UUID: %s", uuid)
+		http.Error(w, "无效的文件标识符", http.StatusBadRequest)
+		return
+	}
+
 	room := r.URL.Query().Get("room")
 	if room == "" {
 		room = "default"
@@ -825,34 +895,27 @@ func (s *ClipboardServer) handleClearAll(w http.ResponseWriter, r *http.Request)
 	s.messageQueue.Unlock()
 
 	// 删除关联的文件
-	s.runMutex.Lock() // 保护 uploadFileMap
+	s.runMutex.Lock()
 	var filesToRemove []string
 	if room == "" { // 清空所有文件
 		for uuid := range s.uploadFileMap {
 			filesToRemove = append(filesToRemove, uuid)
 		}
-		s.uploadFileMap = make(map[string]File) // 清空 map
-	} else { // 只清空指定房间的文件 (需要消息中有房间信息来判断)
-		// 这个逻辑比较复杂，因为 uploadFileMap 本身不直接关联房间。
-		// 需要遍历原始消息（在它们被清除之前）来确定哪些文件属于该房间。
-		// 或者，如果 PostEvent 中记录了文件UUID，可以在清除消息时收集这些UUID。
-		// 简单起见，如果按房间清除，我们目前只清除消息，文件由过期机制处理。
-		// 一个更完善的实现会跟踪与房间关联的文件。
-		// 或者，在清除消息时，如果消息是文件类型且属于该房间，则记录其UUID并删除。
-		// 这里我们假设，如果按房间清除，文件暂时不主动删除，依赖过期。
-		// 如果是全局清除，则删除所有文件。
-		if room == "" {
-			for _, uuid := range filesToRemove {
-				filePath := filepath.Join(s.storageFolder, uuid)
-				if err := os.Remove(filePath); err != nil {
-					if !os.IsNotExist(err) {
-						s.logger.Printf("警告: 清除所有时删除文件 %s 失败: %v", filePath, err)
-					}
+		s.uploadFileMap = make(map[string]File)
+	}
+	s.runMutex.Unlock()
+
+	// 删除物理文件（在锁外进行）
+	if len(filesToRemove) > 0 {
+		for _, uuid := range filesToRemove {
+			filePath := filepath.Join(s.storageFolder, uuid)
+			if err := os.Remove(filePath); err != nil {
+				if !os.IsNotExist(err) {
+					s.logger.Printf("警告: 清除所有时删除文件 %s 失败: %v", filePath, err)
 				}
 			}
 		}
 	}
-	s.runMutex.Unlock()
 
 	// 广播 clearAll 事件
 	clearWsMsg := WebSocketMessage{
@@ -1161,12 +1224,14 @@ func (s *ClipboardServer) handleLatestContent(w http.ResponseWriter, r *http.Req
 
 // handleRooms 处理房间列表请求
 func (s *ClipboardServer) handleRooms(w http.ResponseWriter, r *http.Request) {
-	// 添加 CORS 头
-	w.Header().Set("Access-Control-Allow-Origin", "*")
+	origin := r.Header.Get("Origin")
+	if origin != "" && s.isAllowedOrigin(origin, r.Host) {
+		w.Header().Set("Access-Control-Allow-Origin", origin)
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
+	}
 	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
-	// 处理预检请求
 	if r.Method == "OPTIONS" {
 		w.WriteHeader(http.StatusOK)
 		return

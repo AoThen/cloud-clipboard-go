@@ -13,20 +13,21 @@ import (
 
 type Config struct {
 	Server struct {
-		Host        interface{} `json:"host"`        //done
-		Port        int         `json:"port"`        //done
-		Prefix      string      `json:"prefix"`      //done
-		History     int         `json:"history"`     //done
-		HistoryFile string      `json:"historyFile"` // 添加历史文件路径
-		StorageDir  string      `json:"storageDir"`  // 添加存储目录路径
-		// Auth    string `json:"auth"`
-		Auth interface{} `json:"auth"` //done
-		Cert string      `json:"cert"`
-		Key  string      `json:"key"`
+		Host        interface{} `json:"host"`
+		Port        int         `json:"port"`
+		Prefix      string      `json:"prefix"`
+		History     int         `json:"history"`
+		HistoryFile string      `json:"historyFile"`
+		StorageDir  string      `json:"storageDir"`
+		Auth        interface{} `json:"auth"`
+		Cert        string      `json:"cert"`
+		Key         string      `json:"key"`
 
-		// 添加房间相关配置
-		RoomList    bool `json:"roomList"`    // 是否启用房间列表功能
-		RoomCleanup int  `json:"roomCleanup"` // 房间清理间隔（秒）
+		RoomList           bool     `json:"roomList"`
+		RoomCleanup        int      `json:"roomCleanup"`
+		CORSAllowedOrigins []string `json:"corsAllowedOrigins"`
+		RateLimit          int      `json:"rateLimit"`
+		RateLimitBurst     int      `json:"rateLimitBurst"`
 	} `json:"server"`
 	Text struct {
 		Limit int `json:"limit"` //done
@@ -86,29 +87,35 @@ func defaultConfig() *Config {
 
 	return &Config{
 		Server: struct {
-			Host        interface{} `json:"host"`
-			Port        int         `json:"port"`
-			Prefix      string      `json:"prefix"`
-			History     int         `json:"history"`
-			HistoryFile string      `json:"historyFile"`
-			StorageDir  string      `json:"storageDir"`
-			Auth        interface{} `json:"auth"`
-			Cert        string      `json:"cert"`
-			Key         string      `json:"key"`
-			RoomList    bool        `json:"roomList"`
-			RoomCleanup int         `json:"roomCleanup"`
+			Host               interface{} `json:"host"`
+			Port               int         `json:"port"`
+			Prefix             string      `json:"prefix"`
+			History            int         `json:"history"`
+			HistoryFile        string      `json:"historyFile"`
+			StorageDir         string      `json:"storageDir"`
+			Auth               interface{} `json:"auth"`
+			Cert               string      `json:"cert"`
+			Key                string      `json:"key"`
+			RoomList           bool        `json:"roomList"`
+			RoomCleanup        int         `json:"roomCleanup"`
+			CORSAllowedOrigins []string    `json:"corsAllowedOrigins"`
+			RateLimit          int         `json:"rateLimit"`      // 每秒最大请求数，0表示禁用
+			RateLimitBurst     int         `json:"rateLimitBurst"` // 突发请求数
 		}{
-			Host:        []string{"0.0.0.0"},
-			Port:        9501,
-			Prefix:      "",
-			History:     100,
-			HistoryFile: historyFile,
-			StorageDir:  storageDir,
-			Auth:        false,
-			Cert:        "",
-			Key:         "",
-			RoomList:    false, // 默认关闭房间列表功能
-			RoomCleanup: 3600,  // 默认1小时清理一次空房间
+			Host:               []string{"0.0.0.0"},
+			Port:               9501,
+			Prefix:             "",
+			History:            100,
+			HistoryFile:        historyFile,
+			StorageDir:         storageDir,
+			Auth:               false,
+			Cert:               "",
+			Key:                "",
+			RoomList:           false,
+			RoomCleanup:        3600,
+			CORSAllowedOrigins: []string{},
+			RateLimit:          100, // 默认每秒钟100个请求
+			RateLimitBurst:     200, // 默认突发200个请求
 		},
 		Text: struct {
 			Limit int `json:"limit"`

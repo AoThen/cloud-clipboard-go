@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"regexp"
 
 	"image"
 	"image/jpeg"
@@ -335,4 +336,74 @@ func getScheme(r *http.Request) string {
 		return "https"
 	}
 	return "http"
+}
+
+// isAllowedOrigin 验证 Origin 是否允许
+func isAllowedOrigin(origin, host string) bool {
+	if origin == "" {
+		return true
+	}
+	
+	// 允许同源请求
+	if strings.Contains(origin, "://"+host) {
+		return true
+	}
+	
+	// TODO: 从配置读取 CORS 白名单
+	// 例如：["https://example.com", "https://app.example.com"]
+	
+	// 对于非同源请求，暂时拒绝（更安全的默认策略）
+	return false
+}
+
+// isValidUUID 验证 UUID 格式
+func isValidUUID(uuidStr string) bool {
+	if uuidStr == "" {
+		return false
+	}
+	
+	// 标准 UUID 格式: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+	pattern := "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+	matched, _ := regexp.MatchString(pattern, uuidStr)
+	return matched
+}
+
+// sanitizeFilename 清理文件名，防止路径遍历
+func sanitizeFilename(filename string) string {
+	if filename == "" {
+		return "unnamed"
+	}
+	
+	// 移除路径分隔符
+	filename = strings.ReplaceAll(filename, "/", "_")
+	filename = strings.ReplaceAll(filename, "\\", "_")
+	filename = strings.ReplaceAll(filename, "..", "_")
+	
+	// 限制长度
+	if len(filename) > 255 {
+		filename = filename[:255]
+	}
+	
+	return strings.TrimSpace(filename)
+}
+
+// validateRoomName 验证房间名称
+func validateRoomName(room string) error {
+	if room == "" {
+		return nil // 空房间名称是有效的
+	}
+	
+	// 限制长度
+	if len(room) > 100 {
+		return fmt.Errorf("房间名称过长（最大 100 字符）")
+	}
+	
+	// 不允许特殊字符
+	for _, r := range room {
+		if (r < 32 || r > 126) || r == '/' || r == '\\' {
+			return fmt.Errorf("房间名称包含非法字符")
+		}
+	}
+	
+	return nil
 }

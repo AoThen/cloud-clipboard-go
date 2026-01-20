@@ -27,10 +27,36 @@ import (
 var (
 	upgrader = websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
-			return true
+			origin := r.Header.Get("Origin")
+			if origin == "" {
+				return true
+			}
+
+			// 默认情况下，只允许同源请求
+			host := r.Host
+			return checkOriginAllowed(origin, host, nil)
 		},
 	}
 )
+
+func checkOriginAllowed(origin, host string, allowedOrigins []string) bool {
+	// 如果提供了白名单，检查 origin 是否在白名单中
+	if len(allowedOrigins) > 0 {
+		for _, allowed := range allowedOrigins {
+			if origin == allowed {
+				return true
+			}
+		}
+		return false
+	}
+
+	// 默认情况下，只允许同源请求
+	if origin == "" {
+		return true
+	}
+
+	return strings.Contains(origin, "://"+host)
+}
 
 var server_version = "go verion by Jonnyan404"
 var build_git_hash = show_bin_info()
@@ -93,26 +119,26 @@ func NewClipboardServer(cfg *Config) (*ClipboardServer, error) {
 			// cfg.Server.Auth = "" // 清空，使其认证失败
 		} else {
 			cfg.Server.Auth = randomPassword // 将随机密码存回配置（内存中）
-			logger.Printf("认证已启用，随机生成的密码为: %s", randomPassword)
+			logger.Printf("认证已启用，随机生成密码")
 			fmt.Printf("== \033[07m 认证密码 \033[0m: \033[33m%s\033[0m\n", randomPassword)
 		}
 	} else if authStr, ok := cfg.Server.Auth.(string); ok && authStr != "" {
-		logger.Printf("认证已启用，使用配置的密码。")
+		logger.Printf("认证已启用，使用配置的密码（长度: %d）", len(authStr))
 	} else if authInt, ok := cfg.Server.Auth.(int); ok && authInt != 0 {
 		// 将整数转换为字符串
 		strPassword := strconv.Itoa(authInt)
 		cfg.Server.Auth = strPassword
-		logger.Printf("认证已启用，使用转换为字符串的整数密码: %s", strPassword)
+		logger.Printf("认证已启用，使用整数密码（长度: %d）", len(strPassword))
 	} else if authFloat, ok := cfg.Server.Auth.(float64); ok && authFloat != 0 {
 		// JSON解析数字默认使用float64，需要将其转换为字符串
 		strPassword := strconv.FormatFloat(authFloat, 'f', 0, 64)
 		cfg.Server.Auth = strPassword
-		logger.Printf("认证已启用，使用转换为字符串的数字密码: %s", strPassword)
+		logger.Printf("认证已启用，使用数字密码（长度: %d）", len(strPassword))
 	} else if authNumber, ok := cfg.Server.Auth.(json.Number); ok {
 		// 处理json.Number类型（在一些JSON解析配置中可能会出现）
 		strPassword := string(authNumber)
 		cfg.Server.Auth = strPassword
-		logger.Printf("认证已启用，使用转换为字符串的JSON数字密码: %s", strPassword)
+		logger.Printf("认证已启用，使用JSON数字密码（长度: %d）", len(strPassword))
 	} else {
 		logger.Printf("认证未启用。")
 		cfg.Server.Auth = "" // 确保在未配置或配置为false时为空字符串
@@ -251,7 +277,7 @@ func (s *ClipboardServer) saveHistoryData() {
 		return
 	}
 
-	if err := os.WriteFile(s.historyFilePath, data, 0644); err != nil {
+	if err := os.WriteFile(s.historyFilePath, data, 0600); err != nil {
 		s.logger.Printf("写入历史文件 %s 时出错: %v", s.historyFilePath, err)
 	} else {
 		s.logger.Printf("历史记录已成功保存到 %s", s.historyFilePath)
@@ -326,22 +352,25 @@ func (s *ClipboardServer) setupRoutes() {
 	mux.HandleFunc(prefix+"/rooms", s.handleRooms)
 	mux.HandleFunc(prefix+"/file/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
-			s.handle_file(w, r)
+			s.rateLimitMiddleware(s.handle_file)(w, r)
 		} else {
-			s.authMiddleware(s.handle_file)(w, r)
+			s.rateLimitMiddleware(s.authMiddleware(s.handle_file))(w, r)
 		}
 	})
-	mux.HandleFunc(prefix+"/text", s.authMiddleware(s.handle_text))
-	mux.HandleFunc(prefix+"/upload", s.authMiddleware(s.handle_upload))
-	mux.HandleFunc(prefix+"/upload/chunk", s.authMiddleware(s.handle_upload))
-	mux.HandleFunc(prefix+"/upload/chunk/", s.authMiddleware(s.handle_chunk))
-	mux.HandleFunc(prefix+"/upload/finish/", s.authMiddleware(s.handle_finish))
-	mux.HandleFunc(prefix+"/revoke/", s.authMiddleware(s.handle_revoke))
-	mux.HandleFunc(prefix+"/revoke/all", s.authMiddleware(s.handleClearAll))
-	mux.HandleFunc(prefix+"/content/", s.authMiddleware(s.handleContent))
+	mux.HandleFunc(prefix+"/text", s.rateLimitMiddleware(s.authMiddleware(s.handle_text)))
+	mux.HandleFunc(prefix+"/upload", s.rateLimitMiddleware(s.authMiddleware(s.handle_upload)))
+	mux.HandleFunc(prefix+"/upload/chunk", s.rateLimitMiddleware(s.authMiddleware(s.handle_upload)))
+	mux.HandleFunc(prefix+"/upload/chunk/", s.rateLimitMiddleware(s.authMiddleware(s.handle_chunk)))
+	mux.HandleFunc(prefix+"/upload/finish/", s.rateLimitMiddleware(s.authMiddleware(s.handle_finish)))
+	mux.HandleFunc(prefix+"/revoke/", s.rateLimitMiddleware(s.authMiddleware(s.handle_revoke)))
+	mux.HandleFunc(prefix+"/revoke/all", s.rateLimitMiddleware(s.authMiddleware(s.handleClearAll)))
+	mux.HandleFunc(prefix+"/content/", s.rateLimitMiddleware(s.authMiddleware(s.handleContent)))
 
 	s.httpServer = &http.Server{
-		Handler: mux,
+		Handler:      mux,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  120 * time.Second,
 	}
 }
 
@@ -526,14 +555,13 @@ func (s *ClipboardServer) performCleanExpiredFiles() {
 	currentTime := time.Now().Unix()
 	var toRemove []string
 
-	// 注意：并发访问 s.uploadFileMap 需要加锁
-	// s.mapMutex.Lock() // 假设有一个用于保护 map 的锁
+	s.runMutex.Lock()
 	for uuid, fileInfo := range s.uploadFileMap {
 		if fileInfo.ExpireTime < currentTime {
 			toRemove = append(toRemove, uuid)
 		}
 	}
-	// s.mapMutex.Unlock()
+	s.runMutex.Unlock()
 
 	if len(toRemove) > 0 {
 		s.logger.Printf("发现 %d 个过期文件需要移除。", len(toRemove))
@@ -541,15 +569,15 @@ func (s *ClipboardServer) performCleanExpiredFiles() {
 		for _, uuid := range toRemove {
 			filePath := filepath.Join(s.storageFolder, uuid)
 			if err := os.Remove(filePath); err != nil {
-				if !os.IsNotExist(err) { // 如果文件不存在，则不是一个错误
+				if !os.IsNotExist(err) {
 					s.logger.Printf("移除文件 %s 时出错: %v", filePath, err)
 				}
 			} else {
 				s.logger.Printf("已移除过期文件: %s (UUID: %s)", filePath, uuid)
 			}
-			// s.mapMutex.Lock()
-			delete(s.uploadFileMap, uuid) // 从 map 中移除
-			// s.mapMutex.Unlock()
+			s.runMutex.Lock()
+			delete(s.uploadFileMap, uuid)
+			s.runMutex.Unlock()
 			removedCount++
 		}
 		if removedCount > 0 {
@@ -672,14 +700,39 @@ func hash_murmur3(data []byte, seed uint32) uint32 {
 	return h.Sum32()
 }
 
+func (s *ClipboardServer) isAllowedOrigin(origin string, host string) bool {
+	allowedOrigins := s.config.Server.CORSAllowedOrigins
+
+	if len(allowedOrigins) == 0 {
+		return false
+	}
+
+	for _, allowed := range allowedOrigins {
+		if origin == allowed {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *ClipboardServer) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// 添加 CORS 头，允许跨域请求
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		origin := r.Header.Get("Origin")
 
-		// 处理预检请求
+		if origin != "" {
+			if s.isAllowedOrigin(origin, r.Host) {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Set("Access-Control-Allow-Credentials", "true")
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+				w.Header().Set("Access-Control-Max-Age", "86400")
+				w.Header().Set("Vary", "Origin")
+			} else {
+				http.Error(w, "Origin not allowed", http.StatusForbidden)
+				return
+			}
+		}
+
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
 			return
@@ -766,7 +819,7 @@ func (s *ClipboardServer) authMiddleware(next http.HandlerFunc) http.HandlerFunc
 		}
 
 		if token != expectedPassword {
-			s.logger.Printf("认证失败: 无效令牌。来自 IP: %s, 路径: %s,token:%s,server:%s", clientIP, r.URL.Path, token, expectedPassword)
+			s.logger.Printf("认证失败: 无效令牌。来自 IP: %s, 路径: %s", clientIP, r.URL.Path)
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)
 			json.NewEncoder(w).Encode(map[string]string{

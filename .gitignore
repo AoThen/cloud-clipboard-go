@@ -16,3 +16,4 @@ cloudflare/pages/server*
 *.keystore
 clipboard-monitor
 clipboard-monitor/src-tauri/target/
+cloud-clip/SECURITY_CONFIG.md
