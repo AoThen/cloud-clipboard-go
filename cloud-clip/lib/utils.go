@@ -390,15 +390,13 @@ func sanitizeFilename(filename string) string {
 // validateRoomName 验证房间名称
 func validateRoomName(room string) error {
 	if room == "" {
-		return nil // 空房间名称是有效的
+		return nil
 	}
 	
-	// 限制长度
 	if len(room) > 100 {
 		return fmt.Errorf("房间名称过长（最大 100 字符）")
 	}
 	
-	// 不允许特殊字符
 	for _, r := range room {
 		if (r < 32 || r > 126) || r == '/' || r == '\\' {
 			return fmt.Errorf("房间名称包含非法字符")
@@ -406,4 +404,73 @@ func validateRoomName(room string) error {
 	}
 	
 	return nil
+}
+
+// isValidRoomName 验证房间名称
+func isValidRoomName(room string) bool {
+	if room == "" || room == "default" {
+		return true
+	}
+	if len(room) > 100 {
+		return false
+	}
+	pattern := `^[a-zA-Z0-9_-]+$`
+	matched, _ := regexp.MatchString(pattern, room)
+	return matched
+}
+
+// isValidFilename 验证文件名
+func isValidFilename(filename string) bool {
+	if filename == "" || len(filename) > 255 {
+		return false
+	}
+	forbiddenChars := []string{"/", "\\", ":", "*", "?", "\"", "<", ">", "|", "\x00"}
+	for _, char := range forbiddenChars {
+		if strings.Contains(filename, char) {
+			return false
+		}
+	}
+	forbiddenNames := []string{"CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"}
+	upperName := strings.ToUpper(filename)
+	for _, name := range forbiddenNames {
+		if upperName == name {
+			return false
+		}
+	}
+	if strings.HasPrefix(filename, ".") {
+		return false
+	}
+	if strings.HasSuffix(filename, " ") || strings.HasSuffix(filename, ".") {
+		return false
+	}
+	return true
+}
+
+// allowedMimeTypes 允许的 MIME 类型白名单
+var allowedMimeTypes = map[string]bool{
+	"image/jpeg":              true,
+	"image/png":               true,
+	"image/gif":               true,
+	"image/webp":              true,
+	"image/svg+xml":           true,
+	"audio/mpeg":              true,
+	"audio/wav":               true,
+	"audio/ogg":               true,
+	"video/mp4":               true,
+	"video/webm":              true,
+	"video/quicktime":         true,
+	"text/plain":              true,
+	"text/html":               true,
+	"text/css":                true,
+	"text/javascript":         true,
+	"application/json":        true,
+	"application/pdf":         true,
+	"application/zip":         true,
+	"application/x-tar":       true,
+	"application/gzip":        true,
+}
+
+// isAllowedMimeType 检查 MIME 类型是否允许
+func isAllowedMimeType(mimeType string) bool {
+	return allowedMimeTypes[mimeType]
 }
