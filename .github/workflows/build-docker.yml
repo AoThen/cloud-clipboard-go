@@ -1,4 +1,4 @@
-name: "Publish Container Image"
+name: "Publish Container Image beta"
 on:
   # push:
   workflow_dispatch: # 添加手动触发
