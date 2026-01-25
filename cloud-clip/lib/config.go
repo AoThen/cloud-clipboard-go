@@ -33,9 +33,10 @@ type Config struct {
 		Limit int `json:"limit"` //done
 	} `json:"text"`
 	File struct {
-		Expire int `json:"expire"` //done
-		Chunk  int `json:"chunk"`  //done, but no limit
-		Limit  int `json:"limit"`  //done
+		Expire          int `json:"expire"`          //done
+		Chunk           int `json:"chunk"`           //done, but no limit
+		Limit           int `json:"limit"`           //done
+		CleanupInterval int `json:"cleanupInterval"` //文件清理间隔（秒）
 	} `json:"file"`
 }
 
@@ -123,13 +124,15 @@ func defaultConfig() *Config {
 			Limit: 4096,
 		},
 		File: struct {
-			Expire int `json:"expire"`
-			Chunk  int `json:"chunk"`
-			Limit  int `json:"limit"`
+			Expire          int `json:"expire"`
+			Chunk           int `json:"chunk"`
+			Limit           int `json:"limit"`
+			CleanupInterval int `json:"cleanupInterval"`
 		}{
-			Expire: 3600,
-			Chunk:  2 * _MB,
-			Limit:  256 * _MB,
+			Expire:          3600,
+			Chunk:           2 * _MB,
+			Limit:           256 * _MB,
+			CleanupInterval: 300, // 默认5分钟
 		},
 	}
 }

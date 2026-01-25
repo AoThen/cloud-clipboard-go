@@ -538,8 +538,11 @@ func (s *ClipboardServer) cleanExpiredFilesLoop() {
 		s.logger.Println("文件过期时间设置为0或负数，不启动过期文件清理任务。")
 		return
 	}
-	// 清理间隔可以配置，例如 s.config.File.ExpireCheckInterval，默认为5分钟
-	checkInterval := 5 * time.Minute
+	// 清理间隔，默认5分钟
+	checkInterval := time.Duration(s.config.File.CleanupInterval) * time.Second
+	if checkInterval <= 0 {
+		checkInterval = 5 * time.Minute
+	}
 	s.logger.Printf("后台过期文件清理任务已启动，检查间隔: %v", checkInterval)
 	ticker := time.NewTicker(checkInterval)
 	defer ticker.Stop()

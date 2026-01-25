@@ -128,6 +128,7 @@ cat>"${CONFIG_FILE}"<<EOF
     },
     "file": {
         "expire": ${FILE_EXPIRE:-3600},
+        "cleanupInterval": ${FILE_CLEANUP_INTERVAL:-300},
         "chunk": 1048576,
         "limit": ${FILE_LIMIT:-104857600}
     }
