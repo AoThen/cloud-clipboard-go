@@ -208,9 +208,10 @@ func (s *ClipboardServer) handle_push(w http.ResponseWriter, r *http.Request) {
 			Limit int `json:"limit"`
 		} `json:"text"`
 		File struct {
-			Expire int `json:"expire"`
-			Chunk  int `json:"chunk"`
-			Limit  int `json:"limit"`
+			Expire          int `json:"expire"`
+			Chunk           int `json:"chunk"`
+			Limit           int `json:"limit"`
+			CleanupInterval int `json:"cleanupInterval"`
 		} `json:"file"`
 		Auth bool `json:"auth"`
 	}{
@@ -223,7 +224,17 @@ func (s *ClipboardServer) handle_push(w http.ResponseWriter, r *http.Request) {
 			RoomList: s.config.Server.RoomList,
 		},
 		Text: s.config.Text,
-		File: s.config.File,
+		File: struct {
+			Expire          int `json:"expire"`
+			Chunk           int `json:"chunk"`
+			Limit           int `json:"limit"`
+			CleanupInterval int `json:"cleanupInterval"`
+		}{
+			Expire:          s.config.File.Expire,
+			Chunk:           s.config.File.Chunk,
+			Limit:           s.config.File.Limit,
+			CleanupInterval: s.config.File.CleanupInterval,
+		},
 		Auth: authNeeded,
 	}
 
