@@ -94,7 +94,7 @@ class AdvancedSettingsActivity : AppCompatActivity() {
                 "historyFile": null,
                 "storageDir": null,
                 "roomList": false,
-                "roomCleanup": 3600
+                "roomCleanup": 86400
             },
             "text": {
                 "limit": 4096

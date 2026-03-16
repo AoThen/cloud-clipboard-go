@@ -1,0 +1,29 @@
+{
+  "server": {
+    "host": [
+      "0.0.0.0"
+    ],
+    "port": 9501,
+    "prefix": "",
+    "history": 100,
+    "historyFile": "history.json",
+    "storageDir": "./uploads",
+    "auth": false,
+    "cert": "",
+    "key": "",
+    "roomList": false,
+    "roomCleanup": 86400,
+    "corsAllowedOrigins": [],
+    "rateLimit": 100,
+    "rateLimitBurst": 200
+  },
+  "text": {
+    "limit": 4096
+  },
+  "file": {
+    "expire": 3600,
+    "chunk": 2097152,
+    "limit": 268435456,
+    "cleanupInterval": 86400
+  }
+}

@@ -40,7 +40,7 @@ start_service() {
         "storageDir": "/etc/cloud-clipboard/data/upload",
         "auth": false,
         "roomList": false,
-        "roomCleanup": 3600
+        "roomCleanup": 86400
     },
     "text": {
         "limit": 4096

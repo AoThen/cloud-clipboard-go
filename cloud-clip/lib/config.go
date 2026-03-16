@@ -113,7 +113,7 @@ func defaultConfig() *Config {
 			Cert:               "",
 			Key:                "",
 			RoomList:           false,
-			RoomCleanup:        3600,
+			RoomCleanup:        86400,
 			CORSAllowedOrigins: []string{},
 			RateLimit:          100, // 默认每秒钟100个请求
 			RateLimitBurst:     200, // 默认突发200个请求
@@ -132,7 +132,7 @@ func defaultConfig() *Config {
 			Expire:          3600,
 			Chunk:           2 * _MB,
 			Limit:           256 * _MB,
-			CleanupInterval: 300, // 默认5分钟
+			CleanupInterval: 86400, // 默认1天
 		},
 	}
 }

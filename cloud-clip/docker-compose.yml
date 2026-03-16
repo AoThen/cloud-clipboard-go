@@ -23,6 +23,7 @@ services:
       # 文件配置
       - FILE_EXPIRE=${FILE_EXPIRE:-3600}
       - FILE_LIMIT=${FILE_LIMIT:-104857600}
+      - FILE_CLEANUP_INTERVAL=${FILE_CLEANUP_INTERVAL:-86400}
       - TEXT_LIMIT=${TEXT_LIMIT:-4096}
 
       # 房间配置

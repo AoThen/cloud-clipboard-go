@@ -113,12 +113,12 @@ cat>"${CONFIG_FILE}"<<EOF
         "prefix": "${PREFIX}",
         "key": "${KEY}",
         "cert": "${CERT}",
-        "history": ${MESSAGE_NUM:-10},
+        "history": ${MESSAGE_NUM:-100},
         "auth": ${AUTH_PASSWORD:-false},
         "historyFile": "/app/server-node/data/history.json",
         "storageDir": "/app/server-node/data/",
         "roomList": ${ROOM_LIST:-false},
-        "roomCleanup": 3600,
+        "roomCleanup": 86400,
         "corsAllowedOrigins": ${CORS_ORIGINS_JSON},
         "rateLimit": ${RATE_LIMIT:-100},
         "rateLimitBurst": ${RATE_LIMIT_BURST:-200}
@@ -128,7 +128,7 @@ cat>"${CONFIG_FILE}"<<EOF
     },
     "file": {
         "expire": ${FILE_EXPIRE:-3600},
-        "cleanupInterval": ${FILE_CLEANUP_INTERVAL:-300},
+        "cleanupInterval": ${FILE_CLEANUP_INTERVAL:-86400},
         "chunk": 1048576,
         "limit": ${FILE_LIMIT:-104857600}
     }

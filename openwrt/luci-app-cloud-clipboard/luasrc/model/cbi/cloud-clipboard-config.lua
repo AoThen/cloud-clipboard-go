@@ -62,7 +62,7 @@ else
                     storageDir = "/etc/cloud-clipboard/data/upload",
                     auth = auth ~= "",
                     roomList = false,
-                    roomCleanup = 3600
+                    roomCleanup = 86400
                 },
                 text = {
                     limit = 4096
@@ -94,7 +94,7 @@ else
         "storageDir": "/etc/cloud-clipboard/data/upload",
         "auth": ]] .. (auth ~= "" and "true" or "false") .. [[,
         "roomList": false,
-        "roomCleanup": 3600
+        "roomCleanup": 86400
     },
     "text": {
         "limit": 4096
@@ -161,7 +161,7 @@ json_help.value = [[
         "storageDir": "/etc/cloud-clipboard/data/upload",         // 文件存储目录
         "auth": false,              // 是否启用认证,true时需在UCI设置中配置密码
         "roomList": false,          // 是否启用房间列表功能
-        "roomCleanup": 3600        // 房间清理周期(秒),清理消息数为0的房间
+        "roomCleanup": 86400        // 房间清理周期(秒),清理消息数为0的房间
     },
     "text": {
         "limit": 4096              // 文本大小限制(字节)

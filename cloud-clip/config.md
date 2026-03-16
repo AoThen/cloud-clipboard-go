@@ -13,12 +13,18 @@
         ],
         "port": 9501, // 端口号，falsy 值表示不监听
         "prefix": "", // 部署时的URL前缀，例如想要在 http://localhost/prefix/ 访问，则将这一项设为 /prefix
-        "history": 10, // 消息历史记录的数量
+        "history": 100, // 消息历史记录的数量
         "auth": false, // 是否在连接时要求使用密码认证，falsy 值表示不使用
         "historyFile": null, // 自定义历史记录存储路径，默认为当前目录的 history.json
         "storageDir": null, // 自定义文件存储目录，默认为临时文件夹的.cloud-clipboard-storage目录
         "roomList": false, // 房间列表开关,默认false
-        "roomCleanup": 3600 //房间清理周期(秒)，清理消息数0的房间
+        "roomCleanup": 3600, // 房间清理周期(秒)，清理消息数0的房间
+        "corsAllowedOrigins": ["*"], // CORS允许的来源，支持:
+        //   - 具体域名: "http://example.com"
+        //   - 通配符: "*" (允许所有来源，但不支持credentials)
+        //   - null: "null" (允许file://协议)
+        "rateLimit": 100, // 每秒最大请求数，0表示禁用
+        "rateLimitBurst": 200 // 速率限制突发数
     },
     "text": {
         "limit": 4096 // 文本的长度限制
@@ -26,7 +32,8 @@
     "file": {
         "expire": 3600, // 上传文件的有效期，超过有效期后自动删除，单位为秒
         "chunk": 1048576, // 上传文件的分片大小，不能超过 5 MB，单位为 byte
-        "limit": 104857600 // 上传文件的大小限制，单位为 byte
+        "limit": 104857600, // 上传文件的大小限制，单位为 byte
+        "cleanupInterval": 86400 // 文件清理间隔，单位为秒，默认为1天
     }
 }
 ```

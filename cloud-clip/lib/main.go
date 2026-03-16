@@ -43,6 +43,14 @@ func checkOriginAllowed(origin, host string, allowedOrigins []string) bool {
 	// 如果提供了白名单，检查 origin 是否在白名单中
 	if len(allowedOrigins) > 0 {
 		for _, allowed := range allowedOrigins {
+			// 支持通配符 "*"
+			if allowed == "*" {
+				return true
+			}
+			// 支持 null (file:// 协议)
+			if allowed == "null" && origin == "null" {
+				return true
+			}
 			if origin == allowed {
 				return true
 			}
@@ -711,6 +719,12 @@ func (s *ClipboardServer) isAllowedOrigin(origin string, host string) bool {
 	}
 
 	for _, allowed := range allowedOrigins {
+		if allowed == "*" {
+			return true
+		}
+		if allowed == "null" && origin == "null" {
+			return true
+		}
 		if origin == allowed {
 			return true
 		}
@@ -723,13 +737,27 @@ func (s *ClipboardServer) authMiddleware(next http.HandlerFunc) http.HandlerFunc
 		origin := r.Header.Get("Origin")
 
 		if origin != "" {
+			hasWildcard := false
+			for _, allowed := range s.config.Server.CORSAllowedOrigins {
+				if allowed == "*" {
+					hasWildcard = true
+					break
+				}
+			}
+
 			if s.isAllowedOrigin(origin, r.Host) {
-				w.Header().Set("Access-Control-Allow-Origin", origin)
-				w.Header().Set("Access-Control-Allow-Credentials", "true")
+				if hasWildcard {
+					w.Header().Set("Access-Control-Allow-Origin", "*")
+				} else {
+					w.Header().Set("Access-Control-Allow-Origin", origin)
+					w.Header().Set("Access-Control-Allow-Credentials", "true")
+				}
 				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 				w.Header().Set("Access-Control-Max-Age", "86400")
-				w.Header().Set("Vary", "Origin")
+				if !hasWildcard {
+					w.Header().Set("Vary", "Origin")
+				}
 			} else {
 				http.Error(w, "Origin not allowed", http.StatusForbidden)
 				return

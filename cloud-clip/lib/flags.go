@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -21,11 +22,17 @@ var (
 	flg_history      = flag.Int("history", 0, "指定历史记录数量，如果设置则覆盖配置文件")
 	flg_text_limit   = flag.Int("text_limit", 0, "指定文本字数，如果设置则覆盖配置文件")
 	flg_file_expire  = flag.Int("file_expire", 0, "指定文件过期时间，如果设置则覆盖配置文件")
-	flg_file_limit   = flag.Int("file_limit", 0, "指定文件大小限制，如果设置则覆盖配置文件")
-	flg_cert         = flag.String("cert", "", "指定证书文件，如果设置则覆盖配置文件")
+	flg_file_limit      = flag.Int("file_limit", 0, "指定文件大小限制，如果设置则覆盖配置文件")
+	flg_cleanup_interval = flag.Int("cleanup_interval", 0, "指定过期文件清理间隔（秒），如果设置则覆盖配置文件")
+	flg_cert            = flag.String("cert", "", "指定证书文件，如果设置则覆盖配置文件")
 	flg_key          = flag.String("key", "", "指定密钥文件，如果设置则覆盖配置文件")
-	flg_static_dir   = flag.String("static", "", "Path to external static files (overrides config, used if not in embed mode or useEmbeddedStr=false)")
-	flg_help         = flag.Bool("h", false, "显示帮助信息")
+	flg_static_dir         = flag.String("static", "", "Path to external static files (overrides config, used if not in embed mode or useEmbeddedStr=false)")
+	flg_rate_limit         = flag.Int("rate_limit", 0, "指定速率限制（每秒最大请求数），如果设置则覆盖配置文件")
+	flg_rate_limit_burst  = flag.Int("rate_limit_burst", 0, "指定速率限制突发数，如果设置则覆盖配置文件")
+	flg_room_list          = flag.Bool("room_list", false, "启用房间列表展示功能，如果设置则覆盖配置文件")
+	flg_room_cleanup      = flag.Int("room_cleanup", 0, "指定房间清理周期（秒），如果设置则覆盖配置文件")
+	flg_cors_allowed_origins = flag.String("cors_allowed_origins", "", "指定CORS允许的来源，用逗号分隔，如果设置则覆盖配置文件")
+	flg_help               = flag.Bool("h", false, "显示帮助信息")
 )
 
 // 自定义帮助信息，格式更美观
@@ -168,4 +175,55 @@ func applyCommandLineArgs(cfg *Config) { // 修改参数为 cfg *Config
 		cfg.Server.Key = *flg_key
 	}
 
+	// 应用清理间隔配置（优先级：命令行 > 环境变量 > 配置文件）
+	if *flg_cleanup_interval > 0 {
+		fmt.Printf("使用命令行指定的清理间隔: %d 秒\n", *flg_cleanup_interval)
+		cfg.File.CleanupInterval = *flg_cleanup_interval
+	} else if envCleanupInterval := getEnvInt("FILE_CLEANUP_INTERVAL", 0); envCleanupInterval > 0 {
+		fmt.Printf("使用环境变量指定的清理间隔: %d 秒\n", envCleanupInterval)
+		cfg.File.CleanupInterval = envCleanupInterval
+	}
+
+	// 应用速率限制配置
+	if *flg_rate_limit > 0 {
+		fmt.Printf("使用命令行指定的速率限制: %d 请求/秒\n", *flg_rate_limit)
+		cfg.Server.RateLimit = *flg_rate_limit
+	}
+	if *flg_rate_limit_burst > 0 {
+		fmt.Printf("使用命令行指定的速率限制突发数: %d\n", *flg_rate_limit_burst)
+		cfg.Server.RateLimitBurst = *flg_rate_limit_burst
+	}
+
+	// 应用房间列表配置
+	if *flg_room_list {
+		fmt.Printf("使用命令行指定的房间列表: 启用\n")
+		cfg.Server.RoomList = true
+	}
+
+	// 应用房间清理配置
+	if *flg_room_cleanup > 0 {
+		fmt.Printf("使用命令行指定的房间清理周期: %d 秒\n", *flg_room_cleanup)
+		cfg.Server.RoomCleanup = *flg_room_cleanup
+	}
+
+	// 应用 CORS 配置
+	if *flg_cors_allowed_origins != "" {
+		fmt.Printf("使用命令行指定的CORS允许来源: %s\n", *flg_cors_allowed_origins)
+		origins := strings.Split(*flg_cors_allowed_origins, ",")
+		for i := range origins {
+			origins[i] = strings.TrimSpace(origins[i])
+		}
+		cfg.Server.CORSAllowedOrigins = origins
+	}
+
+}
+
+// getEnvInt 读取环境变量并转换为整数
+func getEnvInt(key string, defaultValue int) int {
+	if val := os.Getenv(key); val != "" {
+		if intVal, err := strconv.Atoi(val); err == nil && intVal > 0 {
+			return intVal
+		}
+	}
+	return defaultValue
 }
